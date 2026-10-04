@@ -56,7 +56,7 @@ from domain import demo_records,fit_model,evaluate_model
 import re
 
 def create_app(data_dir=None,no_demo=False):
-    app=Flask(__name__);setup(app,data_dir or Path(__file__).parent/"data-local")
+    app=Flask(__name__);setup(app,data_dir or Path(__file__).parent/"data-local");app.config["SESSION_COOKIE_NAME"]="pratibimb_session"
     with connect(app) as conn:
         conn.executescript("CREATE TABLE IF NOT EXISTS returns(id INTEGER PRIMARY KEY,month TEXT NOT NULL,comment TEXT NOT NULL,customer TEXT NOT NULL,predicted INTEGER,assigned INTEGER,revision INTEGER NOT NULL DEFAULT 1); CREATE TABLE IF NOT EXISTS clusters(id INTEGER PRIMARY KEY,label TEXT NOT NULL,terms TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 1); CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY,return_id INTEGER NOT NULL,previous INTEGER,next INTEGER,note TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP); CREATE TABLE IF NOT EXISTS snapshots(id INTEGER PRIMARY KEY,payload TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);")
         if not no_demo and conn.execute("SELECT COUNT(*) FROM returns").fetchone()[0]==0:
