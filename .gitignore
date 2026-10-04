@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.coverage
+htmlcov/
+*.sqlite*
+data-local/
+uploads/
+.DS_Store
