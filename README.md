@@ -36,7 +36,7 @@ Open **http://127.0.0.1:8111**.
 
 ## Demo walkthrough
 
-1. Read the opening comparison: July and September each contain **30 return comments**. The comparison explicitly shows both denominators.
+1. Select July as baseline and September as current, then click **Read the change**. Each contains **30 return comments**. The comparison explicitly shows both denominators. Opening or refreshing the journal displays the latest saved report without creating a new snapshot.
 2. Inspect the four learned patterns. Frequent terms and representative comments help you interpret the clusters; rename a label after reading the evidence.
 3. Filter comments by month or pattern. Change one assignment, enter a review reason, and save. The original model prediction stays available; the human assignment and audit history are separate.
 4. Compare months again to see how that correction affects the report. An older comparison remains unchanged in the archive.
