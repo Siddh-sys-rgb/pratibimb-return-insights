@@ -6,7 +6,7 @@ A small returns journal for fictional **Rang Retail, Ahmedabad**. Learn recurrin
 
 The model learns text clusters locally. Frequent terms label those clusters; a human can rename them. This is an unsupervised educational application, not an LLM and not a claim of production classification accuracy.
 
-Clone commands below use the intended repository URL. If you already have this folder locally, skip `git clone` and `cd`.
+Clone commands below use this project's public repository URL. If you already have this folder locally, skip `git clone` and `cd`.
 
 ## Setup independently
 
@@ -124,7 +124,13 @@ Recorded local result: **45 passed**, **97.41% statement coverage**. Tests verif
 
 ## Screenshots
 
-Real browser captures are added under `docs/screenshots/` after exercising the working workflows. Authored CSV fixtures are original test inputs, not real customer records.
+![Pratibimb working desktop demo](docs/screenshots/overview.jpg)
+
+![Pratibimb completed workflow](docs/screenshots/workflow.jpg)
+
+![Pratibimb mobile demo](docs/screenshots/mobile.jpg)
+
+Real captures from the running local app using fictional records. [Browser verification](docs/BROWSER_CHECKS.md).
 
 ## Limitations and next steps
 
