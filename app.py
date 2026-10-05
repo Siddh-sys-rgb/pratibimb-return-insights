@@ -60,8 +60,20 @@ import numpy as np
 def create_app(data_dir=None,no_demo=False):
     app=Flask(__name__);setup(app,data_dir or Path(__file__).parent/"data-local");app.config["SESSION_COOKIE_NAME"]="pratibimb_session"
     with connect(app) as conn:
-        conn.executescript("CREATE TABLE IF NOT EXISTS returns(id INTEGER PRIMARY KEY,month TEXT NOT NULL,comment TEXT NOT NULL,customer TEXT NOT NULL,source TEXT NOT NULL DEFAULT 'user-import',predicted INTEGER,assigned INTEGER,revision INTEGER NOT NULL DEFAULT 1); CREATE TABLE IF NOT EXISTS clusters(id INTEGER PRIMARY KEY,label TEXT NOT NULL,terms TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 1); CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY,return_id INTEGER NOT NULL,previous INTEGER,next INTEGER,note TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP); CREATE TABLE IF NOT EXISTS snapshots(id INTEGER PRIMARY KEY,payload TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP); CREATE TABLE IF NOT EXISTS metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL); CREATE TABLE IF NOT EXISTS imports(digest TEXT PRIMARY KEY,record_count INTEGER NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);")
+        conn.executescript("CREATE TABLE IF NOT EXISTS returns(id INTEGER PRIMARY KEY,month TEXT NOT NULL,comment TEXT NOT NULL,customer TEXT NOT NULL,source TEXT NOT NULL DEFAULT 'user-import',predicted INTEGER,assigned INTEGER,manual_override INTEGER NOT NULL DEFAULT 0 CHECK(manual_override IN (0,1)),revision INTEGER NOT NULL DEFAULT 1); CREATE TABLE IF NOT EXISTS clusters(id INTEGER PRIMARY KEY,label TEXT NOT NULL,terms TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 1); CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY,return_id INTEGER NOT NULL,previous INTEGER,next INTEGER,note TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP); CREATE TABLE IF NOT EXISTS snapshots(id INTEGER PRIMARY KEY,payload TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP); CREATE TABLE IF NOT EXISTS metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL); CREATE TABLE IF NOT EXISTS imports(digest TEXT PRIMARY KEY,record_count INTEGER NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);")
+        conn.execute("BEGIN IMMEDIATE")
         columns={row[1] for row in conn.execute("PRAGMA table_info(returns)")}
+        if "manual_override" not in columns:
+            conn.execute("ALTER TABLE returns ADD COLUMN manual_override INTEGER NOT NULL DEFAULT 0 CHECK(manual_override IN (0,1))")
+            # Audit records establish explicit intent even if a later fit agreed or overwrote it.
+            conn.execute("""UPDATE returns SET
+                revision=revision+CASE WHEN assigned IS NOT (
+                    SELECT next FROM audit WHERE return_id=returns.id AND next IS NOT NULL ORDER BY id DESC LIMIT 1
+                ) THEN 1 ELSE 0 END,
+                assigned=(SELECT next FROM audit WHERE return_id=returns.id AND next IS NOT NULL ORDER BY id DESC LIMIT 1),
+                manual_override=1
+                WHERE EXISTS(SELECT 1 FROM audit WHERE return_id=returns.id AND next IS NOT NULL)""")
+            conn.execute("UPDATE metadata SET value=CAST(value AS INTEGER)+1 WHERE key='workspace_revision'")
         if "source" not in columns:
             conn.execute("ALTER TABLE returns ADD COLUMN source TEXT NOT NULL DEFAULT 'legacy-unclassified'")
             for original in demo_records():
@@ -135,7 +147,7 @@ def create_app(data_dir=None,no_demo=False):
             for row,label in zip(records,labels):
                 mapped=mapping[label]
                 # A previous manual assignment is preserved against stable cluster IDs.
-                assigned=row["assigned"] if row["assigned"] is not None and row["assigned"]!=row["predicted"] else mapped
+                assigned=row["assigned"] if row["manual_override"] else mapped
                 conn.execute("UPDATE returns SET predicted=?,assigned=?,revision=revision+1 WHERE id=?",(mapped,assigned,row["id"]))
             for cluster in clusters:
                 cluster_id=mapping[cluster["id"]]
@@ -163,7 +175,7 @@ def create_app(data_dir=None,no_demo=False):
             if row["revision"]!=rev: return jsonify(error="Return changed; refresh before correcting"),409
             if conn.execute("SELECT id FROM clusters WHERE id=?",(target,)).fetchone() is None: raise ValueError("Unknown cluster")
             if target==row["assigned"]: raise ValueError("Choose a different cluster")
-            conn.execute("UPDATE returns SET assigned=?,revision=revision+1 WHERE id=?",(target,record_id))
+            conn.execute("UPDATE returns SET assigned=?,manual_override=1,revision=revision+1 WHERE id=?",(target,record_id))
             conn.execute("INSERT INTO audit(return_id,previous,next,note) VALUES(?,?,?,?)",(record_id,row["assigned"],target,note.strip()))
             conn.execute("UPDATE metadata SET value=CAST(value AS INTEGER)+1 WHERE key='workspace_revision'")
             updated=dict(conn.execute("SELECT * FROM returns WHERE id=?",(record_id,)).fetchone())

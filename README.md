@@ -71,7 +71,7 @@ Imports allow 1–200 rows, 200 KB for CSV, 5–1000 characters per comment and 
 - The original fixture has 90 rows produced from 16 authored comment templates and simple suffixes. These repetitions are useful for a bounded demo, **not 90 independent accuracy observations**. Names, months and fixture theme labels are not model inputs.
 - Four clusters are a deliberate scope choice. They do not establish the correct number of topics in a real dataset. Sparse unrelated imports, mixed languages and large data shifts may yield poor clusters.
 - Cluster terms and one example are evidence for interpretation. Terms do not establish causal reasons or business recommendations. Human labels can become stale after a data change; review them after fitting.
-- On refit, new cluster IDs are aligned to previous predictions by maximum overlap. Explicit manual corrections are preserved. The unsupervised cluster meaning can still drift; this is documented rather than represented as guaranteed semantic stability.
+- On refit, new cluster IDs are aligned to previous predictions by maximum overlap. Explicit manual corrections have a persisted override flag and remain preserved across every fit, even when an intervening model agrees with the human choice. Existing workspaces recover that explicit intent from the latest correction audit without resetting data. The unsupervised cluster meaning can still drift; this is documented rather than represented as guaranteed semantic stability.
 - Monthly percentages use **assigned return-comment counts as denominators**. Without sales/orders, this app cannot calculate the product return rate. Changes are percentage points, not relative-percent growth.
 - Separate evaluation has six authored pairs. The recorded model passes **6/6 relationship checks**. This is a smoke check, not an accuracy metric or held-out customer study; no evaluation text is inserted into fitting data.
 
@@ -87,7 +87,7 @@ flowchart LR
   F --> G[Immutable report with counts and revisions]
 ```
 
-`domain.py` owns the authored fixture, vectorizer, learned clustering and separate evaluation pairs. `app.py` owns data import, provenance, protection, SQLite transactions and comparisons. Return records keep model prediction and human assignment separately. Cluster labels have revision guards; corrections append an audit record atomically. Snapshots record both month denominators and every contributing return revision. Original comparisons remain stable after edits or refitting.
+`domain.py` owns the authored fixture, vectorizer, learned clustering and separate evaluation pairs. `app.py` owns data import, provenance, protection, SQLite transactions and comparisons. Return records keep model prediction, human assignment and an explicit manual-override flag separately. The interface shows the model suggestion independently, including when it agrees with a human choice. Cluster labels have revision guards; corrections append an audit record atomically. Snapshots record both month denominators and every contributing return revision. Original comparisons remain stable after edits or refitting.
 
 Fitted models are reconstructed locally from saved fitted comments when the process restarts; unsafe pickle files are not accepted. This single-process demo does not implement distributed model-serving synchronization. Fit requests use a workspace revision guard and an atomic SQLite transaction. Whole-batch import hashes prevent retry duplication. Local sessions, CSRF tokens, trusted hosts, literal text rendering and a restrictive content policy protect app writes and display.
 
@@ -118,7 +118,7 @@ python -m pip check
 node --check static/app.js
 ```
 
-Recorded local result: **45 passed**, **97.41% statement coverage**. Tests verify reproducible fits, feature isolation from fixture labels/names, separate evaluation texts, exact monthly denominators, immutable snapshots, stale corrections/labels/fits, competing corrections, import validation and rollback, import provenance and deduplication, correction preservation after refitting, no-demo importing, CSRF and trusted hosts.
+Recorded local result: **48 passed**, **97.89% statement coverage**. Tests verify reproducible fits, feature isolation from fixture labels/names, separate evaluation texts, exact monthly denominators, immutable snapshots, stale corrections/labels/fits, competing corrections, import validation and rollback, import provenance and deduplication, correction preservation across successive agreeing/diverging fits, non-destructive audit-based database migration, no-demo importing, CSRF and trusted hosts.
 
 `constraints-tested.txt` captures the local resolved versions. Install from requirements for your platform; the constraints file is not forced across Python versions. The configured Linux workflow tests Python 3.10 and 3.12 after publication; successful remote checks are not presumed here.
 

@@ -93,3 +93,62 @@ def test_import_provenance_and_duplicate(client,headers):
     assert state['returns'][-1]['source']=='user-import'
     assert state['returns'][0]['source']=='synthetic-demo'
     assert state['model']['training_count']==90 and state['pending_count']==1
+
+def test_explicit_override_survives_model_agreement_then_divergence(client,headers,monkeypatch):
+    """Control one model output across two fits; real fitting supplies all other outputs."""
+    import app as module
+    state=records(client);original=state['returns'][0]['predicted'];target=(original+1)%4
+    correction=client.patch('/api/returns/1',json={'revision':1,'cluster_id':target,'note':'This is an explicit human decision'},headers=headers)
+    assert correction.json['record']['manual_override']==1
+    real_fit=module.fit_model;fit_number=0
+    def changing_prediction(rows):
+        nonlocal fit_number
+        vectorizer,model,labels,clusters=real_fit(rows)
+        # Cluster alignment remains supported by the other 89 unchanged predictions.
+        labels[0]=target if fit_number==0 else original
+        fit_number+=1
+        return vectorizer,model,labels,clusters
+    monkeypatch.setattr(module,'fit_model',changing_prediction)
+    for expected_prediction in (target,original):
+        state=records(client)
+        response=client.post('/api/recluster',json={'workspace_revision':state['workspace_revision']},headers=headers)
+        assert response.status_code==200
+        row=records(client)['returns'][0]
+        assert row['predicted']==expected_prediction
+        assert row['assigned']==target and row['manual_override']==1
+    assert fit_number==2
+    assert len(records(client)['audit'])==1
+
+def test_legacy_migration_recovers_explicit_choice_without_reset(tmp_path):
+    app=create_app(tmp_path);client=app.test_client();headers={'X-CSRF-Token':client.get('/api/session').json['csrf_token']}
+    state=records(client);original=state['returns'][0]['predicted'];target=(original+1)%4
+    client.patch('/api/returns/1',json={'revision':1,'cluster_id':target,'note':'Legacy explicit human choice'},headers=headers)
+    report=client.post('/api/comparisons',json={'baseline':'2026-07','current':'2026-09'},headers=headers).json['comparison']
+    with connect(app) as conn:
+        # Reproduce a legacy database where a refit previously lost the human choice.
+        conn.execute('UPDATE returns SET assigned=predicted WHERE id=1')
+        conn.execute('ALTER TABLE returns DROP COLUMN manual_override')
+        previous_revision=conn.execute('SELECT revision FROM returns WHERE id=1').fetchone()[0]
+    key=(tmp_path/'.session-key').read_text()
+    migrated=create_app(tmp_path);state=records(migrated.test_client());row=state['returns'][0]
+    assert len(state['returns'])==90 and len(state['audit'])==1
+    assert row['manual_override']==1 and row['assigned']==target and row['predicted']==original
+    assert row['revision']==previous_revision+1
+    assert state['returns'][1]['manual_override']==0
+    assert (tmp_path/'.session-key').read_text()==key
+    saved=migrated.test_client().get('/api/comparisons').json['comparisons'][0]['report']
+    assert saved['clusters']==report['clusters']
+    restarted=records(create_app(tmp_path).test_client())
+    assert restarted['returns'][0]['manual_override']==1
+    assert restarted['returns'][0]['revision']==row['revision']
+
+def test_override_migration_marks_choice_even_when_model_already_agrees(tmp_path):
+    app=create_app(tmp_path);client=app.test_client();headers={'X-CSRF-Token':client.get('/api/session').json['csrf_token']}
+    row=records(client)['returns'][0];target=(row['predicted']+1)%4
+    client.patch('/api/returns/1',json={'revision':1,'cluster_id':target,'note':'Model later agrees with this choice'},headers=headers)
+    with connect(app) as conn:
+        conn.execute('UPDATE returns SET predicted=assigned WHERE id=1')
+        conn.execute('ALTER TABLE returns DROP COLUMN manual_override')
+    migrated=records(create_app(tmp_path).test_client())['returns'][0]
+    assert migrated['assigned']==migrated['predicted']==target
+    assert migrated['manual_override']==1 and migrated['revision']==2
