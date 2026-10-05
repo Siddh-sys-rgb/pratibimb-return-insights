@@ -152,3 +152,24 @@ def test_override_migration_marks_choice_even_when_model_already_agrees(tmp_path
     migrated=records(create_app(tmp_path).test_client())['returns'][0]
     assert migrated['assigned']==migrated['predicted']==target
     assert migrated['manual_override']==1 and migrated['revision']==2
+
+@pytest.mark.parametrize('mode',['json','csv'])
+def test_import_provenance_is_explicit_with_legacy_schema_default(tmp_path,mode):
+    app=create_app(tmp_path)
+    with connect(app) as conn:
+        conn.execute("INSERT INTO returns(month,comment,customer) VALUES('2026-06','Older unmatched comment with unknown origin','Older reviewer')")
+        conn.execute('ALTER TABLE returns DROP COLUMN source')
+    migrated=create_app(tmp_path);client=migrated.test_client()
+    with connect(migrated) as conn:
+        source_column=next(column for column in conn.execute('PRAGMA table_info(returns)') if column['name']=='source')
+        assert source_column['dflt_value']=="'legacy-unclassified'"
+    headers={'X-CSRF-Token':client.get('/api/session').json['csrf_token']}
+    if mode=='json':
+        response=client.post('/api/import',json={'records':[{'month':'2026-10','comment':'New explicitly imported return comment','customer':'Diya Patel'}]},headers=headers)
+    else:
+        response=client.post('/api/import',data={'file':(io.BytesIO(b'month,comment,customer\n2026-10,New explicitly imported return comment,Diya Patel\n'),'new.csv')},headers=headers)
+    assert response.status_code==201
+    rows=records(client)['returns']
+    assert rows[-1]['source']=='user-import'
+    assert rows[-2]['source']=='legacy-unclassified'
+    assert rows[0]['source']=='synthetic-demo'

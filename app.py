@@ -124,7 +124,7 @@ def create_app(data_dir=None,no_demo=False):
             conn.execute("BEGIN IMMEDIATE")
             if conn.execute("SELECT digest FROM imports WHERE digest=?",(digest,)).fetchone(): return jsonify(error="This exact import was already added"),409
             if conn.execute("SELECT COUNT(*) FROM returns").fetchone()[0]+len(clean)>1000: raise ValueError("Workspace limit is 1000 comments")
-            conn.executemany("INSERT INTO returns(month,comment,customer) VALUES(?,?,?)",clean)
+            conn.executemany("INSERT INTO returns(month,comment,customer,source) VALUES(?,?,?,'user-import')",clean)
             conn.execute("INSERT INTO imports(digest,record_count) VALUES(?,?)",(digest,len(clean)))
             conn.execute("UPDATE metadata SET value=CAST(value AS INTEGER)+1 WHERE key='workspace_revision'")
         return jsonify(imported=len(clean),note="Comments remain pending until you fit clusters. Imported content is user supplied, not synthetic demo data."),201

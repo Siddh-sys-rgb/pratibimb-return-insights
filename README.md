@@ -47,7 +47,7 @@ Open **http://127.0.0.1:8111**.
 3. Filter comments by month or pattern. Change one assignment, enter a review reason, and save. The original model prediction stays available; the human assignment and audit history are separate.
 4. Compare months again to see how that correction affects the report. An older comparison remains unchanged in the archive.
 5. Open the model notebook and run the six separate evaluation pairs. They test a few expected same/different-cluster relationships and were not fitted as training comments.
-6. Upload `demo/import-comments.csv` under **Bring your own comments**. These eight authored examples are tagged `user-import` because they entered through the import workflow; imported data is never silently labelled as seed data.
+6. Upload `demo/import-comments.csv` under **Bring your own comments**. These eight authored examples are explicitly tagged `user-import` because they entered through the import workflow, including in migrated databases; imported data is never silently labelled as seed data.
 7. Click **Fit / refresh clusters**. Imported comments move out of the pending queue, the seeded fit is reproducible and prior manually corrected assignments remain attached to stable cluster IDs.
 8. To try your own empty workspace, run `python app.py --no-demo --data-dir data-empty --port 8111`. Import at least four distinct comments and fit clusters; no demo dataset is needed.
 
@@ -63,7 +63,7 @@ month,comment,customer
 2026-10,The device battery stopped charging,Rohan Desai
 ```
 
-Imports allow 1–200 rows, 200 KB for CSV, 5–1000 characters per comment and 1–80 characters per customer. A workspace holds at most 1000 comments. Whole batches validate before any row is inserted. An identical normalized batch cannot be imported twice; distinct records may legitimately repeat a comment. Pending imports are excluded from comparisons until a fit assigns them. Retraining is an explicit user action, not a hidden result of import.
+Imports allow 1–200 rows, 200 KB for CSV, 5–1000 characters per comment and 1–80 characters per customer. A workspace holds at most 1000 comments. Whole batches validate before any row is inserted. An identical normalized batch cannot be imported twice; distinct records may legitimately repeat a comment. Pending imports are excluded from comparisons until a fit assigns them. Older unmatched records whose origin is unknown remain `legacy-unclassified`; migration does not guess their provenance. Retraining is an explicit user action, not a hidden result of import.
 
 ## Model and measurement honesty
 
@@ -118,7 +118,7 @@ python -m pip check
 node --check static/app.js
 ```
 
-Recorded local result: **48 passed**, **97.89% statement coverage**. Tests verify reproducible fits, feature isolation from fixture labels/names, separate evaluation texts, exact monthly denominators, immutable snapshots, stale corrections/labels/fits, competing corrections, import validation and rollback, import provenance and deduplication, correction preservation across successive agreeing/diverging fits, non-destructive audit-based database migration, no-demo importing, CSRF and trusted hosts.
+Recorded local result: **50 passed**, **99.16% statement coverage**. Tests verify reproducible fits, feature isolation from fixture labels/names, separate evaluation texts, exact monthly denominators, immutable snapshots, stale corrections/labels/fits, competing corrections, import validation and rollback, import provenance and deduplication, correction preservation across successive agreeing/diverging fits, non-destructive audit-based database migration, no-demo importing, CSRF and trusted hosts.
 
 `constraints-tested.txt` captures the local resolved versions. Install from requirements for your platform; the constraints file is not forced across Python versions. The configured Linux workflow tests Python 3.10 and 3.12 after publication; successful remote checks are not presumed here.
 
